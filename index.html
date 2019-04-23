@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title></title>
+</head>
+<body>
+
+	<canvas id="canvas" width=256 height=256 > </canvas>
+
+<script>
+
+class Automat {
+	constructor(size) {
+		this.size = size;
+		this.data = new Uint32Array(size * size);
+		this.nullData = 0;
+
+		this.randomize();
+	}
+
+	getValue(x,y) {
+		if (x < 0 || y < 0 || x >= this.size || y >= this.size) {
+			return this.nullData;
+		}
+		return this.data[x + (y * this.size)];
+	}
+
+	setValue(x,y, value) {
+		if (x < 0 || y < 0 || x >= this.size || y >= this.size) {
+			return;
+		}
+		return this.data[x + (y * this.size)] = value;
+	}
+
+	tick() {
+		let size = this.size;
+		let newData = new Uint32Array(size * size);
+		// newData.set(this.data);
+
+		for (var i = 0; i < (size * size); i++) {
+			let x = i % size;
+			let y = Math.floor(i / size);
+			newData[i] = this.comparator(x,y);
+		}
+		this.data = newData
+	}
+
+	comparator(x,y) {
+		let value = this.getValue(x,y);
+		let count = this.getValue(x-1,y-1) + this.getValue(x,y-1) + this.getValue(x + 1,y-1) + this.getValue(x-1,y) + this.getValue(x + 1,y) + this.getValue(x-1,y+1) + this.getValue(x,y+1) + this.getValue(x + 1,y+1);
+
+		if (value == 0 && count == 3) {
+			return 1;
+		}
+		if (value == 1) {
+			if (count < 2 || count > 3) {
+				return 0;
+			}
+			return 1;
+		}
+
+		return 0;
+	}
+
+	render() {
+		let size = this.size;
+		let imageData = new ImageData(size, size);
+		// newData.set(this.data);
+		let u32 = new Uint32Array(imageData.data.buffer)
+		for (var i = 0; i < (size * size); i++) {
+			if (this.data[i]) {
+				u32[i] = 0xFFFFFFFF;
+			}
+			else {
+				u32[i] = 0xFF000000;
+			}
+		}
+
+		return imageData
+	}
+
+	randomize() {
+		let size = this.size;
+		for (var i = 0; i < (size * size); i++) {
+			this.data[i] = Math.round(Math.random());
+		}
+	}
+}
+
+var currentAutomat = null;
+
+function init() {
+	currentAutomat = new Automat(256, 256);
+	render();
+
+}
+
+function render() {
+	currentAutomat.tick();
+	let data = currentAutomat.render();
+
+	let canvas = document.getElementById("canvas");
+	let ctx = canvas.getContext('2d');
+	ctx.putImageData(data, 0, 0);
+	window.requestAnimationFrame(render);
+}
+
+
+init();
+
+</script>
+
+</body>
+</html>
