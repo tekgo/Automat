@@ -43,15 +43,11 @@
 		}
 
 		getKernel(x,y) {
-			let values = [];
-
-			for (var i = y - 1; i <= y + 1; i++) {
-				for (var j = x - 1; j <= x + 1; j++) {
-					values.push(this.getValue(j,i));
-				}
-			}
-
-			return values;
+			return [
+			this.getValue(x-1,y-1), this.getValue(x,y-1), this.getValue(x+1,y-1),
+			this.getValue(x-1,y), this.getValue(x,y), this.getValue(x+1,y),
+			this.getValue(x-1,y+1), this.getValue(x,y+1), this.getValue(x+1,y+1)
+			];
 		}
 
 		comparator(x, y, kernel) {
@@ -168,28 +164,25 @@
 			const b = rgb[2];
 			const min = Math.min(Math.min(r, g), b);
 			const max = Math.max(Math.max(r, g), b);
-
-			let d = max - min,
-				h,
+			const d = max - min;
+			let h,
 				s = (max === 0 ? 0 : d / max),
 				v = max / 255;
 
-			switch (max) {
-				case min:
-					h = 0;
-					break;
-				case r:
+			if (d != 0) {
+				if (r == max) {
 					h = (g - b) + d * (g < b ? 6 : 0);
-					h /= 6 * d;
-					break;
-				case g:
+				}
+				else if (g == max) {
 					h = (b - r) + d * 2;
-					h /= 6 * d;
-					break;
-				case b:
+				}
+				else {
 					h = (r - g) + d * 4;
-					h /= 6 * d;
-					break;
+				}
+				h /= 6 * d;
+			}
+			else {
+				h = 0;
 			}
 
 			return Array(h, s, v);
@@ -228,71 +221,44 @@
 			return Array(r * 255, g * 255, b * 255);
 		}
 
-		static colorSwiper(x, y, kernel, hueRate) {
+		static colorSwiper(x, y, kernel, hueRate = (1 / 512), satRate = (1 / 100), valRate = (1 / 100)) {
 			let values = [];
 			let avgSat = 0;
 			let avgBright = 0;
 			for (let i = 0; i < kernel.length; i++) {
 				let hsvValue = Comparator.RGBToHSV(Automat.toRGB(kernel[i]));
 				values.push(hsvValue);
-				avgSat += hsvValue[1];
-				avgBright += hsvValue[2];
+				if (i != 4) {
+					avgSat += hsvValue[1] / 8;
+					avgBright += hsvValue[2] / 8;
+				}
 			}
 
-			let value = values[4];
+			const value = values[4];
 			let newValue = value;
 
-			avgSat = (avgSat - value[1]) / 8;
-			avgBright = (avgBright - value[2]) / 8;
-
-			let dir = (Math.floor(value[0] * 8)) % 8;
-			let next = 0;
-			
-			switch (dir) {
-				case 0:
-					next = 1;
-					break;
-				case 1:
-					next = 2;
-					break;
-				case 2:
-					next = 5;
-					break;
-				case 3:
-					next = 8;
-					break;
-				case 4:
-					next = 7;
-					break;
-				case 5:
-					next = 6;
-					break;
-				case 6:
-					next = 3;
-					break;
-				case 7:
-					next = 0;
-					break;
-			}
+			const dir = (Math.floor(value[0] * 8)) % 8;
+			const dirValues = [1,2,5,8,7,6,3,0];
+			const next = values[dirValues[dir]];
 
 			if (avgBright < 0.4) {
-				newValue[2]+= 0.01;
+				newValue[2]+= valRate;
 			}
 			else if (avgBright > 0.7) {
-				newValue[2]-= 0.01;
+				newValue[2]-= valRate;
 			}
 			else {
-				newValue= values[next];
+				newValue= next;
 			}
 
 			if (avgSat < 0.4) {
-				newValue[1]+= 0.01;
+				newValue[1]+= satRate;
 			}
 			else if (avgSat > 0.7) {
-				newValue[1]-= 0.01;
+				newValue[1]-= satRate;
 			}
 			else {
-				newValue= values[next];
+				newValue= next;
 			}
 
 			newValue[0] += hueRate;
@@ -302,11 +268,15 @@
 		}
 
 		static colorSwipe(x, y, kernel) {
-			return Comparator.colorSwiper(x, y, kernel, 1 / 128);
+			return Comparator.colorSwiper(x, y, kernel, 1 / 128, 1 / 100, 1 / 100);
 		}
 
 		static colorWeaver(x, y, kernel) {
-			return Comparator.colorSwiper(x, y, kernel, 1 / 512);
+			return Comparator.colorSwiper(x, y, kernel, 1 / 512, 1 / 100, 1 / 100);
+		}
+
+		static cyberWeaver(x, y, kernel) {
+			return Comparator.colorSwiper(x, y, kernel, 1 / 512, 1 / 512, 1 / 512);
 		}
 	}
 
@@ -330,6 +300,7 @@
 	}
 
 	var currentAutomat = null;
+	var currentImageData = null;
 
 	function setup(func) {
 		currentAutomat = null;
@@ -337,7 +308,7 @@
 	}
 
 	function init() {
-		setup(Comparator.colorWeaver);
+		setup(Comparator.cyberWeaver);
 		render();
 
 	}
@@ -345,11 +316,33 @@
 	function render() {
 		currentAutomat.tick();
 		let data = currentAutomat.render();
-
+		currentImageData = data;
 		let canvas = document.getElementById("canvas");
 		let ctx = canvas.getContext('2d');
 		ctx.putImageData(scaleImageData(data,2), 0, 0);
 		window.requestAnimationFrame(render);
+	}
+
+	function toDataURL(imageData) {
+		var canvas = document.createElement("canvas");
+		canvas.width = imageData.width;
+		canvas.height = imageData.height;
+		var ctx = canvas.getContext('2d');
+		ctx.putImageData(imageData, 0, 0);
+		return canvas.toDataURL();
+	}
+
+	function exportImage(size = 1) {
+		if (!currentImageData) {
+			return;
+		}
+
+		let imageData = currentImageData;
+		if (size != 1) {
+			imageData = scaleImageData(imageData, size)
+		}
+
+		window.open(toDataURL(imageData));
 	}
 
 </script>
@@ -358,10 +351,14 @@
 <body onload="init();">
 
 	<canvas id="canvas" width=512 height=512 > </canvas><br/>
+	<button onclick="setup(Comparator.cyberWeaver)">CyberWeaver</button>
 	<button onclick="setup(Comparator.colorWeaver)">ColorWeaver</button>
 	<button onclick="setup(Comparator.colorSwipe)">ColorSwipe</button>
 	<button onclick="setup(Comparator.colorFire)">ColorFire</button>
 	<button onclick="setup(Comparator.colorFall)">ColorFall</button>
+	<br/>
+	<button onclick="exportImage(1);">Export</button>
+	<button onclick="exportImage(2);">Export2x</button>
 
 </body>
 </html>
