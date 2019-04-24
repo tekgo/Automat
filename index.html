@@ -166,10 +166,10 @@
 			const r = rgb[0]
 			const g = rgb[1];
 			const b = rgb[2];
+			const min = Math.min(Math.min(r, g), b);
+			const max = Math.max(Math.max(r, g), b);
 
-			let max = Math.max(r, g, b),
-				min = Math.min(r, g, b),
-				d = max - min,
+			let d = max - min,
 				h,
 				s = (max === 0 ? 0 : d / max),
 				v = max / 255;
@@ -229,12 +229,21 @@
 		}
 
 		static colorSwiper(x, y, kernel, hueRate) {
-			let values = kernel.map( c => Comparator.RGBToHSV(Automat.toRGB(c)));
+			let values = [];
+			let avgSat = 0;
+			let avgBright = 0;
+			for (let i = 0; i < kernel.length; i++) {
+				let hsvValue = Comparator.RGBToHSV(Automat.toRGB(kernel[i]));
+				values.push(hsvValue);
+				avgSat += hsvValue[1];
+				avgBright += hsvValue[2];
+			}
+
 			let value = values[4];
 			let newValue = value;
 
-			let avgSat = (values.reduce((accumulator, currentValue) => accumulator + currentValue[1], 0) - value[1]) / 8;
-			let avgBright = (values.reduce((accumulator, currentValue) => accumulator + currentValue[2], 0) - value[2]) / 8;
+			avgSat = (avgSat - value[1]) / 8;
+			avgBright = (avgBright - value[2]) / 8;
 
 			let dir = (Math.floor(value[0] * 8)) % 8;
 			let next = 0;
