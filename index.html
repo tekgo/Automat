@@ -162,6 +162,136 @@
 			return Automat.fromRGB(newValue);
 		}
 
+		static RGBToHSV(rgb) {
+			const r = rgb[0]
+			const g = rgb[1];
+			const b = rgb[2];
+
+			let max = Math.max(r, g, b),
+				min = Math.min(r, g, b),
+				d = max - min,
+				h,
+				s = (max === 0 ? 0 : d / max),
+				v = max / 255;
+
+			switch (max) {
+				case min:
+					h = 0;
+					break;
+				case r:
+					h = (g - b) + d * (g < b ? 6 : 0);
+					h /= 6 * d;
+					break;
+				case g:
+					h = (b - r) + d * 2;
+					h /= 6 * d;
+					break;
+				case b:
+					h = (r - g) + d * 4;
+					h /= 6 * d;
+					break;
+			}
+
+			return Array(h, s, v);
+		}
+
+		static HSVToRGB(arr) {
+			const h = arr[0];
+			const s = arr[1];
+			const v = arr[2];
+			let r, g, b, i, f, p, q, t;
+			i = ~~(h * 6);
+			f = h * 6 - i;
+			p = v * (1 - s);
+			q = v * (1 - f * s);
+			t = v * (1 - (1 - f) * s);
+			switch (i % 6) {
+				case 0:
+					r = v, g = t, b = p;
+					break;
+				case 1:
+					r = q, g = v, b = p;
+					break;
+				case 2:
+					r = p, g = v, b = t;
+					break;
+				case 3:
+					r = p, g = q, b = v;
+					break;
+				case 4:
+					r = t, g = p, b = v;
+					break;
+				case 5:
+					r = v, g = p, b = q;
+					break;
+			}
+			return Array(r * 255, g * 255, b * 255);
+		}
+
+		static colorSwipe(x, y, kernel) {
+			let values = kernel.map( c => Comparator.RGBToHSV(Automat.toRGB(c)));
+			let value = values[4];
+			let newValue = value;
+
+			let avgSat = (values.reduce((accumulator, currentValue) => accumulator + currentValue[1], 0) - value[1]) / 8;
+			let avgBright = (values.reduce((accumulator, currentValue) => accumulator + currentValue[2], 0) - value[2]) / 8;
+
+			let dir = (Math.floor(value[0] * 8)) % 8;
+			let next = 0;
+			
+			switch (dir) {
+				case 0:
+					next = 1;
+					break;
+				case 1:
+					next = 2;
+					break;
+				case 2:
+					next = 5;
+					break;
+				case 3:
+					next = 8;
+					break;
+				case 4:
+					next = 7;
+					break;
+				case 5:
+					next = 6;
+					break;
+				case 6:
+					next = 3;
+					break;
+				case 7:
+					next = 0;
+					break;
+			}
+
+			if (avgBright < 0.4) {
+				newValue[2]+= 0.01;
+			}
+			else if (avgBright > 0.7) {
+				newValue[2]-= 0.01;
+			}
+			else {
+				newValue= values[next];
+			}
+
+			if (avgSat < 0.4) {
+				newValue[1]+= 0.01;
+			}
+			else if (avgSat > 0.7) {
+				newValue[1]-= 0.01;
+			}
+			else {
+				newValue= values[next];
+			}
+
+			newValue[0] += 1 / 128;
+
+
+			return Automat.fromRGB(Comparator.HSVToRGB(newValue));
+		}
+
 	}
 
 	let scaleImageData = function(imgDat1, scale) {
@@ -191,7 +321,7 @@
 	}
 
 	function init() {
-		setup(Comparator.colorFire);
+		setup(Comparator.colorSwipe);
 		render();
 
 	}
@@ -212,6 +342,7 @@
 <body onload="init();">
 
 	<canvas id="canvas" width=512 height=512 > </canvas><br/>
+	<button onclick="setup(Comparator.colorSwipe)">ColorSwipe</button>
 	<button onclick="setup(Comparator.colorFire)">ColorFire</button>
 	<button onclick="setup(Comparator.colorFall)">ColorFall</button>
 
