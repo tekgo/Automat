@@ -228,7 +228,7 @@
 			return Array(r * 255, g * 255, b * 255);
 		}
 
-		static colorSwipe(x, y, kernel) {
+		static colorSwiper(x, y, kernel, hueRate) {
 			let values = kernel.map( c => Comparator.RGBToHSV(Automat.toRGB(c)));
 			let value = values[4];
 			let newValue = value;
@@ -286,12 +286,19 @@
 				newValue= values[next];
 			}
 
-			newValue[0] += 1 / 128;
+			newValue[0] += hueRate;
 
 
 			return Automat.fromRGB(Comparator.HSVToRGB(newValue));
 		}
 
+		static colorSwipe(x, y, kernel) {
+			return Comparator.colorSwiper(x, y, kernel, 1 / 128);
+		}
+
+		static colorWeaver(x, y, kernel) {
+			return Comparator.colorSwiper(x, y, kernel, 1 / 512);
+		}
 	}
 
 	let scaleImageData = function(imgDat1, scale) {
@@ -342,6 +349,7 @@
 <body onload="init();">
 
 	<canvas id="canvas" width=512 height=512 > </canvas><br/>
+	<button onclick="setup(Comparator.colorWeaver)">ColorWeaver</button>
 	<button onclick="setup(Comparator.colorSwipe)">ColorSwipe</button>
 	<button onclick="setup(Comparator.colorFire)">ColorFire</button>
 	<button onclick="setup(Comparator.colorFall)">ColorFall</button>
