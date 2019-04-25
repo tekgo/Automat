@@ -5,41 +5,6 @@
 	<script src="gpuscript.js?v=2"></script>
 <script>
 
-	var hsvFilterCode = `precision mediump float;
-
-vec3 rgb2hsv(vec3 c)
-{
-    vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
-    vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
-    vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
-
-    float d = q.x - min(q.w, q.y);
-    float e = 1.0e-10;
-    return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
-}
-
-// All components are in the range [0…1], including hue.
-vec3 hsv2rgb(vec3 c)
-{
-    vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
-    vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
-    return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
-}
-
-// our texture
-uniform sampler2D u_image;
-uniform vec2 u_textureSize;
-
-// the texCoords passed in from the vertex shader.
-varying vec2 v_texCoord;
-
-void main() {
-   vec3 color = texture2D(u_image, v_texCoord).xyz;
-   vec3 hsv = rgb2hsv(color);
-   hsv.x = fract(hsv.x + 0.001);
-  gl_FragColor = vec4(hsv2rgb(hsv), 1.0);
-}`
-
 	var hsvFilterCode2 = `precision highp float;
 // HSV code from http://lolengine.net/blog/2013/07/27/rgb-to-hsv-in-glsl
 vec3 rgb2hsv(vec3 c)
@@ -73,11 +38,12 @@ uniform vec2 u_textureSize;
 // the texCoords passed in from the vertex shader.
 varying vec2 v_texCoord;
 
-void main() {
+// Local variables
+uniform float u_valStep;
+uniform float u_satStep;
+uniform float u_hueStep;
 
-	float valStep = 1.0 / 100.0;
-	float satStep = 1.0 / 100.0;
-	float hueStep = 1.0 / 512.0;
+void main() {
 
 	vec2 widthStep = vec2(1.0 / u_textureSize.x, 0.0);
     vec2 heightStep = vec2(0.0, 1.0 / u_textureSize.y);
@@ -96,28 +62,22 @@ void main() {
     kernel[8] = rgb2hsv(texture2D(u_image, v_texCoord.xy + widthHeightStep).xyz);
 
     // int offsets[8] = int[8](1,2,5,8,7,6,3,0);
-    int offsets[8];
-    offsets[0] = 1;
-    offsets[1] = 2;
-    offsets[2] = 5;
-    offsets[3] = 8;
-    offsets[4] = 7;
-    offsets[5] = 6;
-    offsets[6] = 3;
-    offsets[7] = 0;
+    vec3 offsets[8];
+    offsets[0] = kernel[1];
+    offsets[1] = kernel[2];
+    offsets[2] = kernel[5];
+    offsets[3] = kernel[8];
+    offsets[4] = kernel[7];
+    offsets[5] = kernel[6];
+    offsets[6] = kernel[3];
+    offsets[7] = kernel[0];
 
     int dir = int(floor(hsv.x * 8.0));
     int offset = 0;
     vec3 nextColor = hsv;
     for (int i=0; i<8; i++) {
         if (i == dir) {
-        	offset = offsets[i];
-        } 
-    }
-
-    for (int i=0; i<9; i++) {
-        if (i == offset) {
-        	nextColor = kernel[i];
+        	nextColor = offsets[i];
         } 
     }
 
@@ -128,28 +88,40 @@ void main() {
     vec3 next = hsv;
 
     if (avgVal < 0.4) {
-    	next.z += valStep;
+    	next.z += u_valStep;
     } else if (avgVal > 0.7) {
-    	next.z -= valStep;
+    	next.z -= u_valStep;
     } else {
     	next = nextColor;
     }
 
     if (avgSat < 0.4) {
-    	next.y += satStep;
+    	next.y += u_satStep;
     } else if (avgSat > 0.7) {
-    	next.y -= satStep;
+    	next.y -= u_satStep;
     } else {
     	next = nextColor;
     }
 
-    // next = nextColor;
-
-   next.x = mod(next.x + hueStep,1.0);
+   next.x = mod(next.x + u_hueStep,1.0);
    next.y = clamp(next.y, 0.0, 1.0);
    next.z = clamp(next.z, 0.0, 1.0);
   gl_FragColor = vec4(rgbLimit(hsv2rgb(next)), 1.0);
 }`
+
+var valStepValue = 1 / 100;
+var satStepValue = 1 / 100;
+var hueStepValue = 1 / 512;
+
+var hueAttributeFunc = function(gl, program) {
+	var valstep = gl.getUniformLocation(program, "u_valStep");
+	var satStep = gl.getUniformLocation(program, "u_satStep");
+	var hueStep = gl.getUniformLocation(program, "u_hueStep");
+
+	gl.uniform1f(valstep, 1 / document.getElementById("valStep").value);
+	gl.uniform1f(satStep, 1 / document.getElementById("satStep").value);
+	gl.uniform1f(hueStep, 1 / document.getElementById("hueStep").value);
+}
 
 	let scaleImageData = function(imgDat1, scale) {
 		var imgDat2 = new ImageData(imgDat1.width * scale, imgDat1.height * scale);
@@ -173,13 +145,15 @@ void main() {
 	var currentAutomat = null;
 	var currentImageData = null;
 
-	function setup(shader) {
-		currentAutomat = null;
-		currentAutomat = new GPUAutomat(512, shader);
+	function setup(value, saturation, hue) {
+		document.getElementById("valStep").value = value;
+		document.getElementById("satStep").value = saturation;
+		document.getElementById("hueStep").value = hue;
+		currentAutomat.randomize();
 	}
 
 	function init() {
-		setup(hsvFilterCode2);
+		currentAutomat = new GPUAutomat(512, hsvFilterCode2, hueAttributeFunc);
 		render();
 
 	}
@@ -223,7 +197,16 @@ void main() {
 <body onload="init();">
 
 	<canvas id="canvas" width=512 height=512 > </canvas><br/>
-	<button onclick="currentAutomat.randomize()">shader</button>
+	<button onclick="setup(100,100,512);">ColorWeaver</button>
+	<button onclick="setup(512,512,512);">CyberWeaver</button>
+	<button onclick="setup(100,100,128);">ColorSwipe</button>
+	<button onclick="currentAutomat.randomize()">reset</button>
+	<br/>
+	<input type="range" id="valStep" name="valStep" min="1" max="2048" value="100" step="1" style="width:512px;"> Brightness Step
+	<br/>
+	<input type="range" id="satStep" name="satStep" min="1" max="2048" value="100" step="1" style="width:512px;"> Saturation Step
+	<br/>
+	<input type="range" id="hueStep" name="hueStep" min="1" max="2048" value="512" step="1" style="width:512px;"> Hue Step
 	<br/>
 	<button onclick="exportImage(1);">Export</button>
 	<button onclick="exportImage(2);">Export2x</button>

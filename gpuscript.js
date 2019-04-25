@@ -164,7 +164,7 @@ var GPUFilterManager = function() {
 			var filter = filters[i];
 			var program = filter.createProgram(gl,vertex);
 
-			drawWithProgram(gl, program, framebuffers[count % 2], width, height, positionBuffer, texcoordBuffer, 1);
+			drawWithProgram(gl, program, framebuffers[count % 2], width, height, positionBuffer, texcoordBuffer, 1, filter.attributeSetup);
 	        gl.bindTexture(gl.TEXTURE_2D, textures[count % 2]);
 			// increment count so we use the other texture next time.
 			++count;
@@ -208,7 +208,7 @@ var GPUFilterManager = function() {
 		return imageData;
 	}
 
-	function drawWithProgram(gl, program, framebuffer, width, height, positionBuffer, texcoordBuffer, flipY) {
+	function drawWithProgram(gl, program, framebuffer, width, height, positionBuffer, texcoordBuffer, flipY, attributeSetup) {
 		// Tell it to use our program (pair of shaders)
 			gl.useProgram(program);
 
@@ -259,6 +259,10 @@ var GPUFilterManager = function() {
 
 			// Tell the shader the resolution of the framebuffer.
 			gl.uniform2f(resolutionLocation, width, height);
+
+			if (attributeSetup) {
+				attributeSetup(gl, program);
+			}
 
 			// Tell webgl the viewport setting needed for framebuffer.
 			gl.viewport(0, 0, width, height);
@@ -317,13 +321,14 @@ var GPUFilter = function(fragmentShader) {
 };
 
 class GPUAutomat {
-	constructor(size, comparatorCode) {
+	constructor(size, comparatorCode, attributeSetup) {
 		this.size = size;
 		this.imageData = new ImageData(size, size)
 		this.nullData = 0xFF808080;
 		this.comparatorCode = comparatorCode;
 
 		this.comparatorFilter = new GPUFilter(comparatorCode);
+		this.comparatorFilter.attributeSetup = attributeSetup;
 
 		this.manager = new GPUFilterManager();
 		this.manager.filters = [this.comparatorFilter];
