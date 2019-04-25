@@ -140,7 +140,7 @@ void main() {
 
     // next = nextColor;
 
-   next.x = fract(1.0 + next.x + hueStep);
+   next.x = mod(1.0 + next.x + hueStep, 1.0);
    next.y = clamp(next.y, 0.0, 1.0);
    next.z = clamp(next.z, 0.0, 1.0);
   gl_FragColor = vec4(hsv2rgb(next), 1.0);
