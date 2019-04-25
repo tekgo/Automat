@@ -339,9 +339,9 @@ class GPUAutomat {
 	randomize() {
 		let size = this.size;
 		for (var i = 0; i < (size * size); i++) {
-			this.imageData.data[i * 4 + 0] = 256;//Math.floor(Math.random() * 256);
-			this.imageData.data[i * 4 + 1] = 0;//Math.floor(Math.random() * 256);
-			this.imageData.data[i * 4 + 2] = 0;//Math.floor(Math.random() * 256);
+			this.imageData.data[i * 4 + 0] = Math.floor(Math.random() * 256);
+			this.imageData.data[i * 4 + 1] = Math.floor(Math.random() * 256);
+			this.imageData.data[i * 4 + 2] = Math.floor(Math.random() * 256);
 		}
 	}
 

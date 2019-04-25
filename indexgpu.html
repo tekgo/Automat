@@ -2,7 +2,7 @@
 <html>
 <head>
 	<title>Automat Testing Ground</title>
-	<script src="gpuscript.js"></script>
+	<script src="gpuscript.js?v=2"></script>
 <script>
 
 	var hsvFilterCode = `precision mediump float;
@@ -40,7 +40,7 @@ void main() {
   gl_FragColor = vec4(hsv2rgb(hsv), 1.0);
 }`
 
-	var hsvFilterCode2 = `precision mediump float;
+	var hsvFilterCode2 = `precision highp float;
 
 vec3 rgb2hsv(vec3 c)
 {
@@ -61,6 +61,11 @@ vec3 hsv2rgb(vec3 c)
     return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
 }
 
+vec3 rgbLimit(vec3 c) {
+
+	return floor(c * 255.0) / 255.0;
+}
+
 // our texture
 uniform sampler2D u_image;
 uniform vec2 u_textureSize;
@@ -70,8 +75,8 @@ varying vec2 v_texCoord;
 
 void main() {
 
-	float valStep = 1.0 / 512.0;
-	float satStep = 1.0 / 512.0;
+	float valStep = 1.0 / 100.0;
+	float satStep = 1.0 / 100.0;
 	float hueStep = 1.0 / 512.0;
 
 	vec2 widthStep = vec2(1.0 / u_textureSize.x, 0.0);
@@ -140,10 +145,10 @@ void main() {
 
     // next = nextColor;
 
-   next.x = fract(next.x + hueStep);
+   next.x = mod(next.x + hueStep,1.0);
    next.y = clamp(next.y, 0.0, 1.0);
    next.z = clamp(next.z, 0.0, 1.0);
-  gl_FragColor = vec4(hsv2rgb(next), 1.0);
+  gl_FragColor = vec4(rgbLimit(hsv2rgb(next)), 1.0);
 }`
 
 	let scaleImageData = function(imgDat1, scale) {
@@ -185,6 +190,7 @@ void main() {
 		currentImageData = data;
 		let canvas = document.getElementById("canvas");
 		let ctx = canvas.getContext('2d');
+		// ctx.putImageData(scaleImageData(data, 2), 0, 0);
 		ctx.putImageData(data, 0, 0);
 		window.requestAnimationFrame(render);
 	}
