@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Automat Testing Ground</title>
+	<script src="gpuscript.js"></script>
+<script>
+
+	var hsvFilterCode = `precision mediump float;
+
+vec3 rgb2hsv(vec3 c)
+{
+    vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
+    vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
+    vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
+
+    float d = q.x - min(q.w, q.y);
+    float e = 1.0e-10;
+    return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
+}
+
+// All components are in the range [0…1], including hue.
+vec3 hsv2rgb(vec3 c)
+{
+    vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+    vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+    return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+}
+
+// our texture
+uniform sampler2D u_image;
+uniform vec2 u_textureSize;
+
+// the texCoords passed in from the vertex shader.
+varying vec2 v_texCoord;
+
+void main() {
+   vec3 color = texture2D(u_image, v_texCoord).xyz;
+   vec3 hsv = rgb2hsv(color);
+   hsv.x = fract(hsv.x + 0.001);
+  gl_FragColor = vec4(hsv2rgb(hsv), 1.0);
+}`
+
+	var hsvFilterCode2 = `precision mediump float;
+
+vec3 rgb2hsv(vec3 c)
+{
+    vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
+    vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
+    vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
+
+    float d = q.x - min(q.w, q.y);
+    float e = 1.0e-10;
+    return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
+}
+
+// All components are in the range [0…1], including hue.
+vec3 hsv2rgb(vec3 c)
+{
+    vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+    vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+    return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+}
+
+// our texture
+uniform sampler2D u_image;
+uniform vec2 u_textureSize;
+
+// the texCoords passed in from the vertex shader.
+varying vec2 v_texCoord;
+
+void main() {
+
+	float valStep = 1.0 / 512.0;
+	float satStep = 1.0 / 512.0;
+	float hueStep = 1.0 / 512.0;
+
+	vec2 widthStep = vec2(1.0 / u_textureSize.x, 0.0);
+    vec2 heightStep = vec2(0.0, 1.0 / u_textureSize.y);
+    vec2 widthHeightStep = vec2(1.0 / u_textureSize.x, 1.0 / u_textureSize.y);
+    vec2 widthNegativeHeightStep = vec2(1.0 / u_textureSize.x, -1.0 / u_textureSize.y);
+
+    vec3 hsv = rgb2hsv(texture2D(u_image, v_texCoord).xyz);
+    vec3 kernel[9];
+    kernel[0] = rgb2hsv(texture2D(u_image, v_texCoord.xy - widthHeightStep).xyz);
+    kernel[1] = rgb2hsv(texture2D(u_image, v_texCoord.xy - heightStep).xyz);
+    kernel[2] = rgb2hsv(texture2D(u_image, v_texCoord.xy + widthNegativeHeightStep).xyz);
+    kernel[3] = rgb2hsv(texture2D(u_image, v_texCoord.xy - widthStep).xyz);
+    kernel[5] = rgb2hsv(texture2D(u_image, v_texCoord.xy + widthStep).xyz);
+    kernel[6] = rgb2hsv(texture2D(u_image, v_texCoord.xy - widthNegativeHeightStep).xyz);
+    kernel[7] = rgb2hsv(texture2D(u_image, v_texCoord.xy + heightStep).xyz);
+    kernel[8] = rgb2hsv(texture2D(u_image, v_texCoord.xy + widthHeightStep).xyz);
+
+    // int offsets[8] = int[8](1,2,5,8,7,6,3,0);
+    int offsets[8];
+    offsets[0] = 1;
+    offsets[1] = 2;
+    offsets[2] = 5;
+    offsets[3] = 8;
+    offsets[4] = 7;
+    offsets[5] = 6;
+    offsets[6] = 3;
+    offsets[7] = 0;
+
+    int dir = int(floor(hsv.x * 8.0));
+    int offset = 0;
+    vec3 nextColor = hsv;
+    for (int i=0; i<8; i++) {
+        if (i == dir) {
+        	offset = offsets[i];
+        } 
+    }
+
+    for (int i=0; i<9; i++) {
+        if (i == offset) {
+        	nextColor = kernel[i];
+        } 
+    }
+
+
+    float avgSat = (kernel[0].y + kernel[1].y + kernel[2].y + kernel[3].y + kernel[5].y + kernel[6].y + kernel[7].y + kernel[8].y) / 8.0;
+    float avgVal = (kernel[0].z + kernel[1].z + kernel[2].z + kernel[3].z + kernel[5].z + kernel[6].z + kernel[7].z + kernel[8].z) / 8.0;
+
+    vec3 next = hsv;
+
+    if (avgVal < 0.4) {
+    	next.z += valStep;
+    } else if (avgVal > 0.7) {
+    	next.z -= valStep;
+    } else {
+    	next = nextColor;
+    }
+
+    if (avgSat < 0.4) {
+    	next.y += satStep;
+    } else if (avgSat > 0.7) {
+    	next.y -= satStep;
+    } else {
+    	next = nextColor;
+    }
+
+    // next = nextColor;
+
+   next.x = fract(1.0 + next.x + hueStep);
+   next.y = clamp(next.y, 0.0, 1.0);
+   next.z = clamp(next.z, 0.0, 1.0);
+  gl_FragColor = vec4(hsv2rgb(next), 1.0);
+}`
+
+	let scaleImageData = function(imgDat1, scale) {
+		var imgDat2 = new ImageData(imgDat1.width * scale, imgDat1.height * scale);
+		var pix1 = new Uint32Array(imgDat1.data.buffer);
+		var pix2 = new Uint32Array(imgDat2.data.buffer);
+		var canvasWidth1 = imgDat1.width;
+		var canvasWidth2 = imgDat2.width;
+		for (let x = 0; x < imgDat1.width; ++x) {
+			for (let y = 0; y < imgDat1.height; ++y) {
+				var idx = y * imgDat1.width + x;
+				for (let i = 0; i < scale; ++i) {
+					for (let j = 0; j < scale; ++j) {
+						pix2[(((y * scale) + j) * imgDat2.width) + (x * scale) + i] = pix1[idx];
+					}
+				}
+			}
+		}
+		return imgDat2
+	}
+
+	var currentAutomat = null;
+	var currentImageData = null;
+
+	function setup(shader) {
+		currentAutomat = null;
+		currentAutomat = new GPUAutomat(512, shader);
+	}
+
+	function init() {
+		setup(hsvFilterCode2);
+		render();
+
+	}
+
+	function render() {
+		currentAutomat.tick();
+		let data = currentAutomat.render();
+		currentImageData = data;
+		let canvas = document.getElementById("canvas");
+		let ctx = canvas.getContext('2d');
+		ctx.putImageData(data, 0, 0);
+		window.requestAnimationFrame(render);
+	}
+
+	function toDataURL(imageData) {
+		var canvas = document.createElement("canvas");
+		canvas.width = imageData.width;
+		canvas.height = imageData.height;
+		var ctx = canvas.getContext('2d');
+		ctx.putImageData(imageData, 0, 0);
+		return canvas.toDataURL();
+	}
+
+	function exportImage(size = 1) {
+		if (!currentImageData) {
+			return;
+		}
+
+		let imageData = currentImageData;
+		if (size != 1) {
+			imageData = scaleImageData(imageData, size)
+		}
+
+		window.open(toDataURL(imageData));
+	}
+
+</script>
+
+</head>
+<body onload="init();">
+
+	<canvas id="canvas" width=512 height=512 > </canvas><br/>
+	<button onclick="currentAutomat.randomize()">shader</button>
+	<br/>
+	<button onclick="exportImage(1);">Export</button>
+	<button onclick="exportImage(2);">Export2x</button>
+
+</body>
+</html>
